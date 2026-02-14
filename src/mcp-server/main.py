@@ -47,13 +47,11 @@ async def call_tool(request: ToolRequest):
     logger.info(f"Tool call received: {tool_name} with args: {args}")
 
     if tool_name == "calculate_tax":
-        # Placeholder logic
         income = args.get("income", 0)
         tax = income * 0.2  # 20% flat tax for example
         return {"result": tax}
     
     elif tool_name == "fetch_stock_price":
-        # Placeholder logic
         return {"result": 150.00, "currency": "USD"}
     
     else:

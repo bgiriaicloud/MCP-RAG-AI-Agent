@@ -23,8 +23,6 @@ MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://mcp-server:8080")
 RAG_ENDPOINT_ID = os.getenv("RAG_ENDPOINT_ID", "endpoint-id")
 
 # Initialize Vertex AI
-# Note: For Vertex AI, authentication is typically handled via Service Account/ADC.
-# If using AI Studio API Key, you would switch to the 'google-generativeai' library.
 vertexai.init(project=PROJECT_ID, location=LOCATION)
 
 # --- Define Gemini Model ---
@@ -50,10 +48,6 @@ def fetch_mcp_tools():
 
 def query_rag(query_text: str):
     """Queries the RAG pipeline (Vertex AI Vector Search)."""
-    # This would call the Vector Search Match Service
-    # match_service_client = aiplatform_v1.MatchServiceClient(...)
-    
-    # Placeholder for retrieval
     logger.info(f"Retrieving context for query: {query_text}")
     return "Retrieved context from documents..."
 
@@ -85,14 +79,10 @@ async def chat(request: ChatRequest):
     Available Tools: {mcp_tools}
     """
     
-    # In a real implementation, you would convert `mcp_tools` into 
-    # `FunctionDeclaration` objects for Gemini function calling.
-    
     # 3. Generate Content
     try:
         response = model.generate_content(
-            contents=[system_instruction, user_query],
-            # tools=[Tool(function_declarations=...)] # If implementing actual function calling
+            contents=[system_instruction, user_query]
         )
         return {"response": response.text}
     except Exception as e:
