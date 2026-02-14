@@ -1,0 +1,103 @@
+name: Deploy to Google Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: us-central1
+  MCP_IMAGE: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mcp-tools
+  AGENT_IMAGE: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mcp-agent
+  WEBAPP_IMAGE: gcr.io/${{ secrets.GCP_PROJECT_ID }}/mcp-web-app
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
+
+      - name: 'Docker Auth'
+        uses: 'docker/login-action@v3'
+        with:
+          username: 'oauth2accesstoken'
+          password: '${{ steps.auth.outputs.access_token }}'
+          registry: 'gcr.io'
+
+      # Build and Push MCP Server
+      - name: Build and Push MCP Server
+        run: |
+          docker build -t $MCP_IMAGE:${{ github.sha }} -t $MCP_IMAGE:latest ./src/mcp-server
+          docker push $MCP_IMAGE:${{ github.sha }}
+          docker push $MCP_IMAGE:latest
+
+      # Build and Push Agent Service
+      - name: Build and Push Agent Service
+        run: |
+          docker build -t $AGENT_IMAGE:${{ github.sha }} -t $AGENT_IMAGE:latest ./src/agent-service
+          docker push $AGENT_IMAGE:${{ github.sha }}
+          docker push $AGENT_IMAGE:latest
+
+      # Build and Push Web App
+      - name: Build and Push Web App
+        run: |
+          docker build -t $WEBAPP_IMAGE:${{ github.sha }} -t $WEBAPP_IMAGE:latest ./src/web-app
+          docker push $WEBAPP_IMAGE:${{ github.sha }}
+          docker push $WEBAPP_IMAGE:latest
+
+      # Deploy MCP Server
+      - name: Deploy MCP Server to Cloud Run
+        id: deploy-mcp
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: mcp-tools
+          region: ${{ env.REGION }}
+          image: ${{ env.MCP_IMAGE }}:${{ github.sha }}
+          flags: '--no-allow-unauthenticated'
+
+      # Deploy Agent Service
+      # Note: We use the URL from the MCP deployment
+      - name: Deploy Agent Service to Cloud Run
+        id: deploy-agent
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: mcp-agent
+          region: ${{ env.REGION }}
+          image: ${{ env.AGENT_IMAGE }}:${{ github.sha }}
+          env_vars: |
+            PROJECT_ID=${{ env.PROJECT_ID }}
+            MCP_SERVER_URL=${{ steps.deploy-mcp.outputs.url }}
+          flags: '--allow-unauthenticated'
+
+      # Deploy Web App
+      - name: Deploy Web App to Cloud Run
+        id: deploy-webapp
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: mcp-web-app
+          region: ${{ env.REGION }}
+          image: ${{ env.WEBAPP_IMAGE }}:${{ github.sha }}
+          env_vars: |
+            AGENT_SERVICE_URL=${{ steps.deploy-agent.outputs.url }}
+          flags: '--allow-unauthenticated'
+
+      - name: Show output URLs
+        run: |
+          echo "MCP Server URL: ${{ steps.deploy-mcp.outputs.url }}"
+          echo "Agent Service URL: ${{ steps.deploy-agent.outputs.url }}"
+          echo "Web App URL: ${{ steps.deploy-webapp.outputs.url }}"
