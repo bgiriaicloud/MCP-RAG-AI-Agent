@@ -5,22 +5,31 @@ from vertexai.generative_models import GenerativeModel, Tool, FunctionDeclaratio
 import logging
 import httpx
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Initialize FastAPI for the Agent Service
 app = FastAPI(title="AI Agent Service", description="Orchestrates RAG & MCP Tools via Gemini")
 logger = logging.getLogger("uvicorn.error")
 
 # --- Configuration ---
-PROJECT_ID = os.getenv("PROJECT_ID", "your-project-id")
-LOCATION = os.getenv("LOCATION", "us-central1")
+PROJECT_ID = os.getenv("GCP_PROJECT_ID", os.getenv("PROJECT_ID", "your-project-id"))
+LOCATION = os.getenv("GCP_REGION", os.getenv("LOCATION", "us-central1"))
+MODEL_NAME = os.getenv("MODEL_NAME", "gemini-3.0-pro")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MCP_SERVER_URL = os.getenv("MCP_SERVER_URL", "http://mcp-server:8080")
 RAG_ENDPOINT_ID = os.getenv("RAG_ENDPOINT_ID", "endpoint-id")
 
+# Initialize Vertex AI
+# Note: For Vertex AI, authentication is typically handled via Service Account/ADC.
+# If using AI Studio API Key, you would switch to the 'google-generativeai' library.
 vertexai.init(project=PROJECT_ID, location=LOCATION)
 
 # --- Define Gemini Model ---
-# Using Gemini 3.0 Pro - Latest and most capable model (Released Nov 2025)
-model = GenerativeModel("gemini-3.0-pro")
+# Using model specified in environment or defaulting to Gemini 3.0 Pro
+model = GenerativeModel(MODEL_NAME)
 
 class ChatRequest(BaseModel):
     query: str
